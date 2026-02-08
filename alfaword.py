@@ -1,15 +1,18 @@
 import os
 from PySide6.QtWidgets import (
     QMainWindow, QLineEdit, QToolBar, QDockWidget, QWidget, QApplication,
-    QLabel, QComboBox, QInputDialog, QTextEdit, QMessageBox, QFileDialog,
+    QComboBox, QInputDialog, QTextEdit, QMessageBox, QFileDialog,
     QStatusBar, QHBoxLayout, QScrollArea, QPushButton, QVBoxLayout,
     QStyleFactory
 )
 from PySide6.QtGui import (
     QAction, QIcon, QKeySequence, QTextCursor, QFont,
-    QFontDatabase, QColor, QPalette, QTextDocument, QTextCharFormat
+    QFontDatabase, QColor, QTextDocument, QTextCharFormat
 )
 from PySide6.QtCore import Qt, QSize
+
+
+from contadorWidget import WordCounterWidget
 
 # ==== VOZ ====
 import speech_recognition as sr
@@ -71,9 +74,7 @@ class VentanaPrincipal(QMainWindow):
         self.negrita_boton.clicked.connect(self.alternar_negrita)
         self.negrita_boton.setCheckable(True)
 
-        contenedor_dock = QWidget()
-
-        layout_dock = QHBoxLayout()  # contenedor horizontal
+        layout_dock = QHBoxLayout()
         layout_dock.setContentsMargins(0, 2, 0, 2)
         layout_dock.setSpacing(2)
         layout_dock.addWidget(self.cursiva_boton)
@@ -110,10 +111,7 @@ class VentanaPrincipal(QMainWindow):
         self.combobox_tamanio.addItems(tam_list)
         self.combobox_tamanio.setEditable(True)
         self.combobox_tamanio.setCurrentText("12")
-
-        self.combobox_tamanio.currentTextChanged.connect(
-            self.on_combobox_tamanio_changed
-        )
+        self.combobox_tamanio.currentTextChanged.connect(self.on_combobox_tamanio_changed)
         layout_dock.addWidget(self.combobox_tamanio)
 
         self.combobox_color = QComboBox(self)
@@ -143,10 +141,25 @@ class VentanaPrincipal(QMainWindow):
         self.combobox_color.textActivated.connect(self.cambiar_color_texto)
         layout_dock.addWidget(self.combobox_color)
 
-        self.contador_label = QLabel("Palabras: 0")
-        self.barra_status.addPermanentWidget(self.contador_label)
-        self.texto.textChanged.connect(self.actualizar_contador_palabras)
+        # ✅ CONTADOR: usa el componente importado + señal
+        self.wordCounter = WordCounterWidget(
+            wpm=200,
+            mostrarPalabras=True,
+            mostrarCaracteres=True,
+            mostrarTiempoLectura=True
+        )
+        self.barra_status.addPermanentWidget(self.wordCounter)
 
+        # Actualiza el contador cuando cambie el texto
+        self.texto.textChanged.connect(self._actualizar_wordcounter_desde_editor)
+
+        # Usa la señal del componente (si quieres reaccionar a los conteos)
+        self.wordCounter.conteoActualizado.connect(self._on_conteo_actualizado)
+
+        # Inicializa el contador con el texto actual
+        self.wordCounter.update_from_text(self.texto.toPlainText())
+
+        # Dock buscar / reemplazar
         self.dock_busqueda = QDockWidget("Buscar y reemplazar", self)
         self.dock_busqueda.setAllowedAreas(Qt.RightDockWidgetArea)
         self.dock_busqueda.setFeatures(QDockWidget.DockWidgetClosable)
@@ -174,7 +187,6 @@ class VentanaPrincipal(QMainWindow):
 
         layout_busqueda.addWidget(self.input_buscar)
         layout_busqueda.addWidget(self.input_reemplazar)
-
         layout_busqueda.addWidget(btn_siguiente)
         layout_busqueda.addWidget(btn_atras)
         layout_busqueda.addWidget(btn_todo)
@@ -184,8 +196,18 @@ class VentanaPrincipal(QMainWindow):
         widget_busqueda.setLayout(layout_busqueda)
         self.dock_busqueda.setWidget(widget_busqueda)
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock_busqueda)
-
         self.dock_busqueda.hide()
+
+    # ====== NUEVO: puente para actualizar WordCounterWidget ======
+    def _actualizar_wordcounter_desde_editor(self):
+        self.wordCounter.update_from_text(self.texto.toPlainText())
+
+    def _on_conteo_actualizado(self, palabras: int, caracteres: int):
+        # Aquí te llegan los valores por señal (por si quieres hacer algo extra)
+        # Ejemplo:
+        # self.barra_status.showMessage(f"{palabras} palabras | {caracteres} caracteres", 1000)
+        pass
+    # ===========================================================
 
     def menubar(self):
         barra_menus = self.menuBar()
@@ -233,100 +255,61 @@ class VentanaPrincipal(QMainWindow):
         menu_archivo.addAction(guardar)
         menu_archivo.addAction(salir)
 
-        menu_editar.addActions(
-            [deshacer, rehacer, cortar, copiar, pegar, buscar, reemplazar]
-        )
-        # ==== VOZ ====
+        menu_editar.addActions([deshacer, rehacer, cortar, copiar, pegar, buscar, reemplazar])
         menu_editar.addAction(dictar_voz)
-        # =============
 
-        barra_herramientas.addActions(
-            [
-                nuevo,
-                abrir,
-                guardar,
-                deshacer,
-                rehacer,
-                cortar,
-                copiar,
-                pegar,
-                buscar,
-                reemplazar,
-                # ==== VOZ ====
-                dictar_voz,
-                # =============
-            ]
-        )
+        barra_herramientas.addActions([nuevo, abrir, guardar, deshacer, rehacer, cortar, copiar, pegar, buscar, reemplazar, dictar_voz])
 
-        nuevo.setWhatsThis("Crear nuevo documento")
         nuevo.setShortcut(QKeySequence("Ctrl+n"))
         nuevo.triggered.connect(self.crear_nuevo)
 
-        abrir.setWhatsThis("Abrir nuevo documento")
         abrir.setShortcut(QKeySequence("Ctrl+o"))
         abrir.triggered.connect(self.abrir_archivo)
 
-        guardar.setWhatsThis("Guardar nuevo documento")
         guardar.setShortcut(QKeySequence("Ctrl+s"))
         guardar.triggered.connect(self.guardar_archivo)
 
-        deshacer.setWhatsThis("Abrir nuevo documento")
         deshacer.setShortcut(QKeySequence("Ctrl+z"))
         deshacer.triggered.connect(self.texto_deshacer)
 
-        rehacer.setWhatsThis("Abrir nuevo documento")
         rehacer.setShortcut(QKeySequence("Ctrl+r"))
         rehacer.triggered.connect(self.texto_rehacer)
 
-        cortar.setWhatsThis("Abrir nuevo documento")
         cortar.setShortcut(QKeySequence("Ctrl+x"))
         cortar.triggered.connect(self.texto_cortar)
 
-        copiar.setWhatsThis("Abrir nuevo documento")
         copiar.setShortcut(QKeySequence("Ctrl+c"))
         copiar.triggered.connect(self.texto_copiar)
 
-        pegar.setWhatsThis("Abrir nuevo documento")
         pegar.setShortcut(QKeySequence("Ctrl+v"))
         pegar.triggered.connect(self.texto_pegar)
 
-        buscar.setWhatsThis("Abrir nuevo documento")
         buscar.setShortcut(QKeySequence("Ctrl+f"))
         buscar.triggered.connect(self.dock_busqueda.show)
 
-        reemplazar.setWhatsThis("Abrir nuevo documento")
         reemplazar.setShortcut(QKeySequence("Ctrl+y"))
         reemplazar.triggered.connect(self.dock_busqueda.show)
 
-        salir.setWhatsThis("Abrir nuevo documento")
         salir.setShortcut(QKeySequence("Alt+F4"))
         salir.triggered.connect(self.salir_programa)
 
-        # ==== VOZ ====
-        dictar_voz.setWhatsThis("Dictar texto mediante reconocimiento de voz")
         dictar_voz.setShortcut(QKeySequence("Ctrl+m"))
         dictar_voz.triggered.connect(self.dictar_por_voz)
-        # =============
 
     # funciones TOOLBAR/MENUBAR
     def crear_nuevo(self):
-        print("Nuevo documento abierto")
         self.texto.clear()
         self.barra_status.showMessage("Nuevo documento abierto", 3000)
 
     def abrir_archivo(self):
-        nombre, _ = QFileDialog.getOpenFileName(
-            self, "Abrir archivo", "", "Texto (*.txt)"
-        )
+        nombre, _ = QFileDialog.getOpenFileName(self, "Abrir archivo", "", "Texto (*.txt)")
         if nombre:
             with open(nombre, "r", encoding="utf-8") as f:
                 self.texto.setPlainText(f.read())
-                self.barra_status.showMessage("Archivo abierto con éxito", 3000)
+            self.barra_status.showMessage("Archivo abierto con éxito", 3000)
 
     def guardar_archivo(self):
-        nombre, _ = QFileDialog.getSaveFileName(
-            self, "Guardar archivo", "", "Texto (*.txt)"
-        )
+        nombre, _ = QFileDialog.getSaveFileName(self, "Guardar archivo", "", "Texto (*.txt)")
         if nombre:
             with open(nombre, "w", encoding="utf-8") as f:
                 f.write(self.texto.toPlainText())
@@ -339,10 +322,10 @@ class VentanaPrincipal(QMainWindow):
             cursor = self.texto.textCursor()
             cursor.movePosition(QTextCursor.Start)
             self.texto.setTextCursor(cursor)
-            self.barra_status.showMessage("Archivo encontrado con éxito", 3000)
-
             if not self.texto.find(texto):
                 self.barra_status.showMessage("Fallo al buscar", 3000)
+            else:
+                self.barra_status.showMessage("Encontrado", 1500)
 
     def on_combobox_tamanio_changed(self):
         texto = self.combobox_tamanio.currentText().strip()
@@ -391,10 +374,7 @@ class VentanaPrincipal(QMainWindow):
 
         doc = self.texto.document()
         cursor = self.texto.textCursor()
-        flags = (
-            QTextDocument.FindFlag.FindBackward
-            | QTextDocument.FindFlag.FindCaseSensitively
-        )
+        flags = QTextDocument.FindFlag.FindBackward | QTextDocument.FindFlag.FindCaseSensitively
 
         resultado = doc.find(texto, cursor, flags)
         if resultado.isNull():
@@ -411,17 +391,14 @@ class VentanaPrincipal(QMainWindow):
     def buscar_todo(self):
         texto_total = self.texto.toPlainText()
         buscar = self.input_buscar.text()
-
         if not buscar:
             return
-
         count = texto_total.count(buscar)
         self.barra_status.showMessage(f"{count} coincidencias", 3000)
 
     def reemplazar_uno(self):
         buscar = self.input_buscar.text()
         reemplazar = self.input_reemplazar.text()
-
         cursor = self.texto.textCursor()
 
         if cursor.selectedText().lower() == buscar.lower():
@@ -503,14 +480,8 @@ class VentanaPrincipal(QMainWindow):
         color_valor = self.color_disponibles[color_nombre]
         self.texto.setStyleSheet(f"background-color: {color_valor};")
 
-    def actualizar_contador_palabras(self):
-        texto = self.texto.toPlainText()
-        num_palabras = len(texto.split())
-        self.contador_label.setText(f"Palabras: {num_palabras}")
-
     # ==== VOZ ====
     def reconocer_voz(self):
-        """Captura audio del micrófono y lo convierte a texto (es-ES)."""
         recognizer = sr.Recognizer()
         try:
             with sr.Microphone() as source:
@@ -518,60 +489,40 @@ class VentanaPrincipal(QMainWindow):
                 recognizer.adjust_for_ambient_noise(source, duration=0.6)
                 recognizer.pause_threshold = 1.2
                 recognizer.non_speaking_duration = 0.6
-                audio = recognizer.listen(
-                    source, timeout=5, phrase_time_limit=10
-                )
+                audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
         except sr.WaitTimeoutError:
             self.barra_status.showMessage("No se detectó voz a tiempo", 3000)
             return ""
         except Exception:
-            QMessageBox.warning(
-                self,
-                "Error de audio",
-                "Ha ocurrido un error al acceder al micrófono.",
-            )
+            QMessageBox.warning(self, "Error de audio", "Ha ocurrido un error al acceder al micrófono.")
             return None
 
         try:
             texto = recognizer.recognize_google(audio, language="es-ES")
             return texto.strip()
         except sr.UnknownValueError:
-            self.barra_status.showMessage(
-                "No se pudo entender lo que dijiste", 3000
-            )
+            self.barra_status.showMessage("No se pudo entender lo que dijiste", 3000)
             return ""
         except sr.RequestError:
-            QMessageBox.warning(
-                self,
-                "Error de red",
-                "No se pudo contactar con el servicio de reconocimiento.",
-            )
+            QMessageBox.warning(self, "Error de red", "No se pudo contactar con el servicio de reconocimiento.")
             return ""
 
     def procesar_texto_de_voz(self, texto):
-        """Inserta en el editor el texto reconocido."""
-        if texto is None:
-            # error gordo ya mostrado
+        if texto is None or texto == "":
             return
-        if texto == "":
-            # nada reconocible
-            return
-
         cursor = self.texto.textCursor()
         cursor.insertText(texto + " ")
         self.texto.setTextCursor(cursor)
         self.barra_status.showMessage("Texto dictado insertado", 3000)
 
     def dictar_por_voz(self):
-        """Acción llamada desde el menú / toolbar."""
         texto = self.reconocer_voz()
         self.procesar_texto_de_voz(texto)
     # =============
 
-    # responsive?
     def resizeEvent(self, event):
         ancho = self.width() * 0.6
-        alto = ancho * 1.414  # proporción A4
+        alto = ancho * 1.414
         self.texto.setFixedSize(ancho, alto)
         super().resizeEvent(event)
 
