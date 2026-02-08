@@ -1,0 +1,197 @@
+# Mini Word — READMESeñales
+
+Este proyecto es un editor de texto sencillo hecho con **PySide6** que incluye:
+- Edición básica (negrita, cursiva, tamaño y fuente)
+- Cambios de color de texto y fondo
+- Buscar y reemplazar (dock)
+- Dictado por voz (SpeechRecognition)
+- Contador de palabras/caracteres/tiempo de lectura mediante `WordCounterWidget`
+
+
+## 1) Señales principales del proyecto
+
+En Qt/PySide, una **señal** es un evento que se emite (se dispara) cuando ocurre algo, y se conecta a una **función slot** (un método) con `.connect(...)`.
+
+En este proyecto hay dos tipos:
+- **Señales de Qt** (por ejemplo `textChanged`, `clicked`, `triggered`)
+- **Señal personalizada** (`conteoActualizado`) del contador
+
+
+## 2) Señales del editor (`QTextEdit`)
+
+### 2.1 `QTextEdit.textChanged`
+**Emisor:** `self.texto` (QTextEdit)  
+**Cuándo se emite:** cada vez que cambia el contenido del editor (escritura, pegado, borrado, etc.)  
+**Conexión típica en el proyecto:**
+```python
+self.texto.textChanged.connect(self._actualizar_wordcounter_desde_editor)
+Slot asociado: VentanaPrincipal._actualizar_wordcounter_desde_editor()
+Objetivo: recalcular el contador usando el texto actual.
+
+python
+Copiar código
+def _actualizar_wordcounter_desde_editor(self):
+    self.wordCounter.update_from_text(self.texto.toPlainText())
+3) Señales del contador (WordCounterWidget)
+3.1 WordCounterWidget.conteoActualizado(int palabras, int caracteres)
+Tipo: señal personalizada (Signal(int, int))
+Emisor: self.wordCounter (WordCounterWidget)
+Cuándo se emite: cada vez que se llama a update_from_text(text) (normalmente cuando el texto cambia)
+
+Qué significa:
+
+palabras: número total de palabras detectadas
+
+caracteres: número total de caracteres del texto (incluye espacios y saltos de línea)
+
+Dónde se emite:
+
+python
+Copiar código
+self.conteoActualizado.emit(palabras, caracteres)
+Conexión típica:
+
+python
+Copiar código
+self.wordCounter.conteoActualizado.connect(self._on_conteo_actualizado)
+Slot asociado: VentanaPrincipal._on_conteo_actualizado(palabras, caracteres)
+Uso: reaccionar al conteo (por ejemplo, mostrar mensajes, validar límites, estadísticas, etc.)
+
+python
+Copiar código
+def _on_conteo_actualizado(self, palabras: int, caracteres: int):
+    # Ejemplo:
+    # self.barra_status.showMessage(f"{palabras} palabras | {caracteres} caracteres", 1000)
+    pass
+4) Señales de botones (QPushButton)
+4.1 QPushButton.clicked
+Emisor: botones del dock superior (negrita/cursiva)
+Cuándo se emite: al hacer clic en el botón
+
+Conexiones:
+
+python
+Copiar código
+self.cursiva_boton.clicked.connect(self.alternar_cursiva)
+self.negrita_boton.clicked.connect(self.alternar_negrita)
+Slots asociados:
+
+VentanaPrincipal.alternar_cursiva()
+
+VentanaPrincipal.alternar_negrita()
+
+5) Señales de QComboBox (fuente, tamaño, color, fondo)
+5.1 QComboBox.textActivated
+Emisor: combobox de fuentes y colores
+Cuándo se emite: cuando el usuario selecciona un texto/opción del desplegable
+
+Conexiones:
+
+python
+Copiar código
+self.combobox_fuentes.textActivated.connect(self.cambiar_fuente)
+self.combobox_color.textActivated.connect(self.cambiar_color_texto)
+self.fondo_color.textActivated.connect(self.cambiar_color_fondo)
+Slots asociados:
+
+VentanaPrincipal.cambiar_fuente(fuente)
+
+VentanaPrincipal.cambiar_color_texto(color_nombre)
+
+VentanaPrincipal.cambiar_color_fondo(color_nombre)
+
+5.2 QComboBox.currentTextChanged
+Emisor: combobox de tamaño
+Cuándo se emite: cada vez que cambia el texto actual (seleccionado o escrito a mano)
+
+Conexión:
+
+python
+Copiar código
+self.combobox_tamanio.currentTextChanged.connect(self.on_combobox_tamanio_changed)
+Slot asociado: VentanaPrincipal.on_combobox_tamanio_changed()
+Uso: cambiar el tamaño de letra aplicando un QTextCharFormat.
+
+6) Señales del menú y barra de herramientas (QAction)
+6.1 QAction.triggered
+Emisor: cada acción del menú/toolbar
+Cuándo se emite: cuando se activa la acción (click o atajo de teclado)
+
+Ejemplos:
+
+python
+Copiar código
+nuevo.triggered.connect(self.crear_nuevo)
+abrir.triggered.connect(self.abrir_archivo)
+guardar.triggered.connect(self.guardar_archivo)
+dictar_voz.triggered.connect(self.dictar_por_voz)
+Slots asociados:
+
+VentanaPrincipal.crear_nuevo()
+
+VentanaPrincipal.abrir_archivo()
+
+VentanaPrincipal.guardar_archivo()
+
+VentanaPrincipal.dictar_por_voz()
+
+etc.
+
+7) Señales del dock Buscar/Reemplazar (botones del panel)
+7.1 QPushButton.clicked (búsqueda)
+Emisor: botones del dock de búsqueda
+Cuándo se emite: al pulsarlos
+
+Conexiones:
+
+python
+Copiar código
+btn_siguiente.clicked.connect(self.buscar_siguiente)
+btn_atras.clicked.connect(self.buscar_atras)
+btn_todo.clicked.connect(self.buscar_todo)
+btn_reemplazar.clicked.connect(self.reemplazar_uno)
+btn_reemplazar_todo.clicked.connect(self.reemplazar_todo)
+Slots asociados:
+
+buscar_siguiente()
+
+buscar_atras()
+
+buscar_todo()
+
+reemplazar_uno()
+
+reemplazar_todo()
+
+8) Flujo típico de señales (ejemplo)
+Caso: el usuario escribe texto en el editor
+
+QTextEdit.textChanged se emite.
+
+Se ejecuta _actualizar_wordcounter_desde_editor().
+
+Se llama a self.wordCounter.update_from_text(...).
+
+El widget recalcula palabras/caracteres/tiempo.
+
+WordCounterWidget.conteoActualizado(palabras, caracteres) se emite.
+
+Se ejecuta _on_conteo_actualizado(palabras, caracteres) si está conectado.
+
+9)Lista de señales
+Emisor	Señal	Slot / Método
+QTextEdit (self.texto)	textChanged	_actualizar_wordcounter_desde_editor
+WordCounterWidget	conteoActualizado(int,int)	_on_conteo_actualizado
+QPushButton (cursiva)	clicked	alternar_cursiva
+QPushButton (negrita)	clicked	alternar_negrita
+QComboBox fuentes	textActivated	cambiar_fuente
+QComboBox tamaño	currentTextChanged	on_combobox_tamanio_changed
+QComboBox color texto	textActivated	cambiar_color_texto
+QComboBox fondo	textActivated	cambiar_color_fondo
+QAction (menú/toolbar)	triggered	crear_nuevo, abrir_archivo, etc.
+Botones búsqueda	clicked	buscar_siguiente, reemplazar_todo, etc.
+
+10) Notas
+El contador se actualiza por el evento real del editor (textChanged) y el widget emite su señal para reutilizar los datos.
+
+Si no necesitas hacer nada con los números de palabras/caracteres, puedes dejar _on_conteo_actualizado vacío.
